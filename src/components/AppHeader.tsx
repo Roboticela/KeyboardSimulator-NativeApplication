@@ -65,6 +65,52 @@ const keyboards = [
   { value: "toshiba-portege-x30-e", label: "Toshiba Portege X30 E", keyboardType: "toshiba-portege-x30-e" as const },
 ];
 
+// Helper function to open links in both web and Tauri environments
+async function openLink(url: string) {
+  if (!url) {
+    console.warn('openLink called with empty URL');
+    return;
+  }
+
+  // If URL is relative (starts with /), construct full URL using site URL from env
+  let fullUrl = url;
+  if (url.startsWith('/')) {
+    const siteUrl = import.meta.env.VITE_SITE_URL || '';
+    if (siteUrl) {
+      // Remove trailing slash from siteUrl if present, then add the path
+      const baseUrl = siteUrl.replace(/\/$/, '');
+      fullUrl = `${baseUrl}${url}`;
+    } else {
+      console.warn('VITE_SITE_URL not set, cannot construct full URL for:', url);
+      return;
+    }
+  }
+
+  try {
+    // Check if we're running in Tauri v2
+    // In Tauri v2, we check for __TAURI_INTERNALS__ or __TAURI_METADATA__
+    const hasTauriInternals = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    const hasTauriMetadata = typeof window !== 'undefined' && '__TAURI_METADATA__' in window;
+    const hasTauriLegacy = typeof window !== 'undefined' && (window as any).__TAURI__ !== undefined;
+    const isTauri = hasTauriInternals || hasTauriMetadata || hasTauriLegacy;
+    
+    if (isTauri) {
+      // Dynamically import Tauri opener plugin
+      const opener = await import('@tauri-apps/plugin-opener');
+      await opener.openUrl(fullUrl);
+      return;
+    }
+  } catch (error) {
+    // If Tauri detection or import fails, fallback to window.open
+    console.error('Failed to open link with Tauri:', error);
+  }
+  
+  // Fallback to window.open for web or if Tauri fails
+  if (typeof window !== 'undefined') {
+    window.open(fullUrl, '_blank', 'noopener,noreferrer');
+  }
+}
+
 
 interface HeaderButton {
   id: string;
@@ -757,13 +803,12 @@ export default function AppHeader() {
               >
                 <DropdownMenuItem 
                   className="flex items-center gap-3 cursor-pointer"
-                  onClick={() => {
-                    // Check for NEXT_PUBLIC_NEXT_DESKTOP_APP (required for client-side access in Next.js)
-                    const isDesktopApp = process.env.NEXT_PUBLIC_NEXT_DESKTOP_APP === 'true' || 
-                                        process.env.NEXT_DESKTOP_APP === 'true';
+                  onClick={async () => {
+                    const isDesktopApp = import.meta.env.VITE_NEXT_DESKTOP_APP === 'true' || 
+                                        import.meta.env.VITE_NEXT_PUBLIC_NEXT_DESKTOP_APP === 'true';
                     const appType = isDesktopApp ? 'DesktopApplication' : 'WebApplication';
                     const githubUrl = `https://github.com/Roboticela/KeyboardSimulator-${appType}`;
-                    window.open(githubUrl, '_blank', 'noopener,noreferrer');
+                    await openLink(githubUrl);
                   }}
                 >
                   <Github className="w-4 h-4" />
@@ -797,10 +842,9 @@ export default function AppHeader() {
               >
                 <DropdownMenuItem 
                   className="flex items-center gap-3 cursor-pointer"
-                  onClick={() => {
-                    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
-                    const privacyUrl = `${siteUrl}/privacy`;
-                    window.open(privacyUrl, '_blank', 'noopener,noreferrer');
+                  onClick={async () => {
+                    const siteUrl = import.meta.env.VITE_SITE_URL || '';
+                    await openLink(`${siteUrl}/privacy`);
                   }}
                 >
                   <Shield className="w-4 h-4" />
@@ -816,10 +860,9 @@ export default function AppHeader() {
               >
                 <DropdownMenuItem 
                   className="flex items-center gap-3 cursor-pointer"
-                  onClick={() => {
-                    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
-                    const termsUrl = `${siteUrl}/terms`;
-                    window.open(termsUrl, '_blank', 'noopener,noreferrer');
+                  onClick={async () => {
+                    const siteUrl = import.meta.env.VITE_SITE_URL || '';
+                    await openLink(`${siteUrl}/terms`);
                   }}
                 >
                   <Scale className="w-4 h-4" />
